@@ -1,0 +1,9 @@
+[Unit]
+Description=network namespace %I
+PartOf=openvpn-client-netns@.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/ip netns add %i
+ExecStop=/bin/ip netns del %i
+RemainAfterExit=yes

@@ -1,0 +1,42 @@
+#!/bin/bash
+# based heavily on http://naju.se/articles/openvpn-netns
+
+[[ $EUID -ne 0 ]] && {
+    echo "$0: this program requires root privileges. try again with 'sudo'?" >&2
+    exit 1
+}
+
+# convert a dot-decimal mask (e.g., 255.255.255.0) to a bit-count mask
+# (like /24) for iproute2. this probably isn't the most beautiful way.
+tobitmask() {
+    bits=0
+    while read -rd . octet; do
+        (( col = 2**7 ))
+        while (( col > 0 )); do
+            (( octet & col )) || break 2
+            (( bits++ ))
+            (( col >>= 1 ))
+        done
+    done <<<"$1"
+    echo $bits
+}
+
+# guess name of network namespace from name of config file
+basename="$(basename "$config")"
+ns="${basename%.conf}"
+netmask="$(tobitmask "$route_netmask_1")"
+
+case $script_type in
+    up)
+        ip -netns "$ns" link set dev lo up
+        ip link set dev $dev up netns "$ns" mtu "$tun_mtu"
+        ip -netns "$ns" addr add "$ifconfig_local/$netmask" dev "$dev"
+    ;;
+    route-up)
+        ip -netns "$ns" route add default via "$route_vpn_gateway"
+    ;;
+    *)
+        echo "$0: unknown \$script_type: '$script_type'" >&2
+        exit 2;
+    ;;
+esac
